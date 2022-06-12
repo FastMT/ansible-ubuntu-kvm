@@ -1,0 +1,45 @@
+######################################################################
+# Prepare external bridged network
+######################################################################
+
+# Configure virtual network interface
+- name: Stop network external
+  community.libvirt.virt_net:
+    command: destroy
+    name: external
+  become: yes
+  when: (kvm_net_list.list_nets | join(',')).find("external") != -1
+  check_mode: no
+
+- name: KVM - undefine network external
+  community.libvirt.virt_net:
+    command: undefine
+    name: external
+  become: yes
+  when: (kvm_net_list.list_nets | join(',')).find("external") != -1
+  check_mode: no
+
+- name: KVM - define network external
+  community.libvirt.virt_net:
+    name: "external"
+    command: define
+    xml: |
+      <network>
+        <name>external</name>
+        <forward mode='bridge'/>
+        <bridge name='br0'/>
+      </network>
+  become: yes
+
+- name: KVM - autostart network external
+  community.libvirt.virt_net:
+    name: external
+    autostart: yes
+  become: yes
+
+- name: KVM - start network external
+  community.libvirt.virt_net:
+    name: external
+    state: active
+    autostart: yes
+  become: yes

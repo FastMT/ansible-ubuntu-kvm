@@ -1,0 +1,156 @@
+#####################################################################################
+# Global
+#
+
+- name: Gathering facts if it was not done before
+  setup:
+  when: ansible_facts['os_family'] is not defined
+
+- name: KVM - install packages
+  apt:
+    state: latest
+    pkg:
+     - dnsmasq
+     - qemu-kvm
+     - libvirt-clients
+     - libvirt-daemon-system
+     - cloud-guest-utils
+     - libguestfs-tools
+     - bridge-utils
+     - virt-manager
+     - qemu-utils
+     - libosinfo-bin
+     - python3-pip
+  become: yes
+
+- name: Install lxml python lib
+  pip:
+    name: lxml
+  become: yes
+
+######################################################################
+# Disable SELinux
+#
+# Used manuals:
+# - https://www.linuxtechi.com/install-configure-kvm-ubuntu-18-04-server/
+# - https://linuxconfig.org/install-and-set-up-kvm-on-ubuntu-20-04-focal-fossa-linux
+#
+######################################################################
+
+- name: KVM - disable SELINUX in /etc/libvirt/qemu.conf
+  lineinfile: 
+    dest: '/etc/libvirt/qemu.conf'
+    state: present
+    line: 'security_driver = "none"'
+  become: yes
+  register: qemu_conf
+
+- name: KVM - enable service libvirtd and start it
+  service: 
+    name: libvirtd
+    state: started
+    enabled: yes
+  become: yes
+
+- name: KVM - restart service libvirtd
+  service: 
+    name: libvirtd
+    state: restarted
+  become: yes
+  when: qemu_conf.changed
+
+######################################################################
+# Configure libvirt users
+######################################################################
+
+- name: Add users to libvirt group
+  ansible.builtin.user:
+    name: "{{ item.user }}"
+    groups: libvirt
+    append: yes
+  with_items: "{{ kvm_users }}"
+  become: yes
+  when: kvm_users | length > 0
+
+######################################################################
+# Configure storage pools in custom folder
+######################################################################
+
+- name: Gather facts about KVM storage pools
+  community.libvirt.virt_pool:
+    command: facts
+  become: yes
+
+- debug:
+    var: ansible_libvirt_pools
+
+- name: Configure storage pools
+  include_tasks: storage_pool.yml
+  with_items:
+    - { name: 'default', path: "{{ kvm_data_folder }}/img" }
+    - { name: 'iso',     path: "{{ kvm_data_folder }}/iso" }
+
+######################################################################
+# Configure virtual network 'default'
+######################################################################
+
+- name: KVM - dnsmasq - set bind interface to virbr0 in /etc/dnsmasq.conf
+  lineinfile: 
+    dest: "/etc/dnsmasq.conf"
+    state: present
+    line: "interface=virbr0"
+  become: yes
+  register: dnsmasq_virbr0
+
+- name: KVM - restart dnsmasq service
+  service: 
+    name: dnsmasq
+    state: restarted
+  become: yes
+  when: dnsmasq_virbr0.changed
+
+# Get list of networks
+- name: KVM - get networks list
+  community.libvirt.virt_net:
+    command: list_nets
+    name: ""
+  become: yes
+  register: kvm_net_list
+
+- name: Print KVM networks
+  debug:
+    var: kvm_net_list
+
+# Get info about 'default' network if it exists
+- name: KVM - get info about virtio net default
+  community.libvirt.virt_net:
+    command: get_xml
+    name: default
+  register: kvm_net_default
+  become: yes
+  changed_when: false
+  when: (kvm_net_list.list_nets | join(',')).find("default") != -1
+
+- debug:
+    var: kvm_net_default
+
+- name: Configure default network (virbr0)
+  include_tasks: network_default.yml
+  when: >
+    kvm_default_ip is defined and (
+    (kvm_net_list.list_nets | join(',')).find("default") == -1 or 
+    kvm_net_default.get_xml.find("<ip address='"+kvm_default_ip+"' netmask='255.255.255.0'>") == -1 )
+
+######################################################################
+# Configure virtual network 'external'
+######################################################################
+
+- name: Display local interfaces
+  debug:
+    msg: "Local interfaces: {{ ansible_interfaces | join(',') }}"
+
+- name: Configure external bridged network on intarface br0 if it present
+  include_tasks: network_external.yml
+  when:
+    - "br0" in ansible_interfaces
+    - (kvm_net_list.list_nets | join(',')).find("external") == -1

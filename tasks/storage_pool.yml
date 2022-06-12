@@ -1,0 +1,47 @@
+######################################################################
+# Prepare storage pool
+######################################################################
+
+- name: "KVM - create folder for storage pool {{item.name}}"
+  file: 
+    path: "{{item.path}}"
+    state: directory
+    mode: 0711
+    owner: root
+    group: root
+  become: yes
+
+- name: "KVM - define storage pool {{item.name}}"
+  community.libvirt.virt_pool:
+    name: "{{item.name}}"
+    command: define
+    mode: 'overwrite'
+    xml: |
+      <pool type='dir'>
+        <name>{{item.name}}</name>
+        <source>
+        </source>
+        <target>
+          <path>{{ item.path }}</path>
+          <permissions>
+            <mode>0711</mode>
+            <owner>0</owner>
+            <group>0</group>
+          </permissions>
+        </target>
+      </pool>
+  become: yes
+  when: not (item.name in ansible_libvirt_pools)
+
+- name: "KVM - autostart pool {{item.name}}"
+  community.libvirt.virt_pool:
+    name: "{{item.name}}"
+    autostart: yes
+  become: yes
+
+- name: "KVM - start pool {{item.name}}"
+  community.libvirt.virt_pool:
+    name: "{{item.name}}"
+    state: active
+    autostart: yes
+  become: yes

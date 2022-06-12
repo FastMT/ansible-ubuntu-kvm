@@ -1,0 +1,85 @@
+######################################################################
+# Prepare virtual network virbr0
+######################################################################
+
+# Configure virtual network interface
+- name: Stop network default
+  community.libvirt.virt_net:
+    command: destroy
+    name: default
+  become: yes
+  when: (kvm_net_list.list_nets | join(',')).find("default") != -1
+  check_mode: no
+
+- name: KVM - undefine network default
+  community.libvirt.virt_net:
+    command: undefine
+    name: default
+  become: yes
+  when: (kvm_net_list.list_nets | join(',')).find("default") != -1
+  check_mode: no
+
+- name: KVM - set IP range for DHCP pool
+  set_fact:
+    kvm_dhcp_start: "{{ kvm_default_ip | ansible.utils.ipsubnet(24) | ansible.utils.ipmath(2) }}"
+    kvm_dhcp_end: "{{ kvm_default_ip | ansible.utils.ipsubnet(24) | ansible.utils.ipmath(250) }}"
+#    when: (kvm_net_list.list_nets | join(',')).find("default") != -1
+  check_mode: no
+
+- name: KVM - define network default
+  community.libvirt.virt_net:
+    name: "default"
+    command: define
+    xml: |
+      <network>
+        <name>default</name>      
+        <bridge name='virbr0' stp='on' delay='0' />   
+        <forward mode='open'/>
+        <ip address='{{ kvm_default_ip }}' netmask='255.255.255.0'>
+          <dhcp>
+            <range start='{{ kvm_dhcp_start }}' end='{{ kvm_dhcp_end }}'/>
+          </dhcp>
+        </ip>
+      </network>
+  become: yes
+
+- name: KVM - autostart network default
+  community.libvirt.virt_net:
+    name: default
+    autostart: yes
+  become: yes
+
+- name: KVM - start network default
+  community.libvirt.virt_net:
+    name: default
+    state: active
+    autostart: yes
+  become: yes
+
+- name: Allow virbr0 in iptables
+  iptables:
+    chain: INPUT
+    in_interface: "virbr0"
+    jump: ACCEPT
+    comment: Allow virbr0
+  become: yes
+  register: iptables
+
+# Save iptables rules and remove any remains of LIBVIRT rules
+- name: Save iptables to disk
+  shell: |
+    iptables-save | grep -v 'TEMP ' | grep -v 'LIBVIRT_' \
+    | grep -v -i 'docker' | grep -v 'A FORWARD ' \
+    | grep -v 'ufw-' >/etc/iptables/rules.v4
+  become: yes
+  when: iptables.changed
+  check_mode: no
+
+- name: Reboot server after iptables was changed just in case
+  reboot:
+  become: yes
+  when: iptables.changed
+  check_mode: no
+
+ 
+

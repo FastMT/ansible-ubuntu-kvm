@@ -1,0 +1,5 @@
+# Data folder for VMs
+kvm_data_folder: "/vm"
+
+# KVM users
+kvm_users: []
