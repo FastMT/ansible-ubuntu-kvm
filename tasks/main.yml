@@ -119,7 +119,7 @@
 
 - name: Print KVM networks
   debug:
-    var: kvm_net_list
+    msg: "KVM networks: {{ kvm_net_list['list_nets'] | default | join (',') }}"
 
 # Get info about 'default' network if it exists
 - name: KVM - get info about virtio net default
