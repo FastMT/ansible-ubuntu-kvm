@@ -36,7 +36,7 @@ ansible-galaxy install -r requirements.yml
 playbook.yml:
 
 ```
-# Configure configure KVM hypervisor
+# Configure KVM hypervisor
 - role: "ubuntu-kvm"
     vars:
       # Optional parameter - IP address for "default" KVM network interface. Netmask is always /24
