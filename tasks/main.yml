@@ -149,8 +149,7 @@
   debug:
     msg: "Local interfaces: {{ ansible_interfaces | join(',') }}"
 
-- name: Configure external bridged network on intarface br0 if it present
+- name: Configure external bridged network on interface br0 if it present
   include_tasks: network_external.yml
-  when:
-    - "br0" in ansible_interfaces
-    - (kvm_net_list.list_nets | join(',')).find("external") == -1
+  when: >
+    "br0" in ansible_interfaces and "external" not in kvm_net_list.list_nets

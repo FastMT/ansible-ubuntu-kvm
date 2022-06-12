@@ -38,7 +38,10 @@ playbook.yml:
 ```
 # Configure iptables
 - role: "ubuntu-kvm"
-    vars:    
+    vars:
+      # Optional parameter - IP address for "default" KVM network interface. Netmask is always /24
+      kvm_default_ip: "192.168.100.1"
+
       # Optional parameter - VM base folder (default: "/vm")
       kvm_data_folder: "/vm"
 
