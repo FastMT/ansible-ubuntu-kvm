@@ -1,5 +1,5 @@
 # ansible-ubuntu-kvm
-Ansible role to configure KVM hypervison on linux (Ubuntu) server 
+Ansible role to configure KVM hypervisor on linux (Ubuntu) server 
 
 ## Description
 
@@ -36,7 +36,7 @@ ansible-galaxy install -r requirements.yml
 playbook.yml:
 
 ```
-# Configure iptables
+# Configure configure KVM hypervisor
 - role: "ubuntu-kvm"
     vars:
       # Optional parameter - IP address for "default" KVM network interface. Netmask is always /24
