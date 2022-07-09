@@ -63,7 +63,22 @@
     jump: ACCEPT
     comment: Allow virbr0
   become: yes
-  register: iptables
+  register: kvm_iptables1
+
+#########################################################
+# Outgoing NAT
+#########################################################
+
+- name: Enable outgoint nat
+  iptables:
+    table: nat
+    chain: POSTROUTING
+    source: "{{ kvm_default_ip | ansible.utils.ipsubnet(24) }}"
+    out_interface: "{{ ansible_default_ipv4.interface }}"
+    jump: MASQUERADE
+    comment: "Outgoing NAT for virbr0"
+  become: yes
+  register: kvm_iptables2
 
 # Save iptables rules and remove any remains of LIBVIRT rules
 - name: Save iptables to disk
@@ -72,14 +87,16 @@
     | grep -v -i 'docker' | grep -v 'A FORWARD ' \
     | grep -v 'ufw-' >/etc/iptables/rules.v4
   become: yes
-  when: iptables.changed
+  when: >-
+    kvm_iptables1.changed or
+    kvm_iptables2.changed
   check_mode: no
 
-- name: Reboot server after iptables was changed just in case
-  reboot:
-  become: yes
-  when: iptables.changed
-  check_mode: no
+#- name: Reboot server after iptables was changed just in case
+#  reboot:
+#  become: yes
+#  when: iptables.changed
+#  check_mode: no
 
  
 
