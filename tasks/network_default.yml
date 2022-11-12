@@ -2,29 +2,54 @@
 # Prepare virtual network virbr0
 ######################################################################
 
-# Configure virtual network interface
-- name: Stop network default
-  community.libvirt.virt_net:
-    command: destroy
-    name: default
-  become: yes
-  when: (kvm_net_list.list_nets | join(',')).find("default") != -1
-  check_mode: no
+- name: Check if default network is present
+  set_fact:
+    kvm_net_default_present: "{{ ((kvm_net_list.list_nets | join(',')).find('default') != -1) | ternary (true,false) }}"
 
-- name: KVM - undefine network default
+- debug:
+    var: kvm_net_default_present
+
+# Get info about 'default' network if it exists
+- name: KVM - get info about virtio net default
   community.libvirt.virt_net:
-    command: undefine
+    command: get_xml
     name: default
+  register: kvm_net_default
   become: yes
-  when: (kvm_net_list.list_nets | join(',')).find("default") != -1
-  check_mode: no
+  changed_when: false
+  when: 
+     - kvm_net_default_present
+
+- debug:
+    var: kvm_net_default
+
+- name: Remove virtual network interface
+  block:
+
+  - name: Stop network default
+    community.libvirt.virt_net:
+      command: destroy
+      name: default
+    become: yes
+    changed_when: true
+    
+  - name: KVM - undefine network default
+    community.libvirt.virt_net:
+      command: undefine
+      name: default
+    become: yes
+    changed_when: true
+
+  # When network exists but not has desired IP
+  when:
+    - kvm_net_default_present and kvm_net_default.get_xml.find("<ip address='"+kvm_default_ip+"' netmask='255.255.255.0'>") == -1
+    - not ansible_check_mode
 
 - name: KVM - set IP range for DHCP pool
   set_fact:
     kvm_dhcp_start: "{{ kvm_default_ip | ansible.utils.ipsubnet(24) | ansible.utils.ipmath(2) }}"
     kvm_dhcp_end: "{{ kvm_default_ip | ansible.utils.ipsubnet(24) | ansible.utils.ipmath(250) }}"
 #    when: (kvm_net_list.list_nets | join(',')).find("default") != -1
-  check_mode: no
 
 - name: KVM - define network default
   community.libvirt.virt_net:
@@ -41,12 +66,19 @@
           </dhcp>
         </ip>
       </network>
+  when:
+    (
+    not kvm_net_default_present or 
+    (kvm_net_default_present and kvm_net_default.get_xml.find("<ip address='"+kvm_default_ip+"' netmask='255.255.255.0'>") == -1)
+    ) and not ansible_check_mode
   become: yes
 
 - name: KVM - autostart network default
   community.libvirt.virt_net:
     name: default
     autostart: yes
+  when: >-
+    not ansible_check_mode
   become: yes
 
 - name: KVM - start network default
@@ -55,6 +87,8 @@
     state: active
     autostart: yes
   become: yes
+  when: >-
+    not ansible_check_mode
 
 - name: Allow virbr0 in iptables
   iptables:
@@ -88,15 +122,9 @@
     | grep -v 'ufw-' >/etc/iptables/rules.v4
   become: yes
   when: >-
-    kvm_iptables1.changed or
-    kvm_iptables2.changed
-  check_mode: no
-
-#- name: Reboot server after iptables was changed just in case
-#  reboot:
-#  become: yes
-#  when: iptables.changed
-#  check_mode: no
+    (kvm_iptables1.changed or
+    kvm_iptables2.changed) and
+    not ansible_check_mode
 
  
 

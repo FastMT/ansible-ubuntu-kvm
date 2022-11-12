@@ -11,7 +11,7 @@
     state: latest
     pkg:
      - dnsmasq
-     - qemu-kvm
+     - qemu-system-x86
      - libvirt-clients
      - libvirt-daemon-system
      - cloud-guest-utils
@@ -121,25 +121,10 @@
   debug:
     msg: "KVM networks: {{ kvm_net_list['list_nets'] | default | join (',') }}"
 
-# Get info about 'default' network if it exists
-- name: KVM - get info about virtio net default
-  community.libvirt.virt_net:
-    command: get_xml
-    name: default
-  register: kvm_net_default
-  become: yes
-  changed_when: false
-  when: (kvm_net_list.list_nets | join(',')).find("default") != -1
-
-- debug:
-    var: kvm_net_default
-
 - name: Configure default network (virbr0)
   include_tasks: network_default.yml
   when: >
-    kvm_default_ip is defined and (
-    (kvm_net_list.list_nets | join(',')).find("default") == -1 or 
-    kvm_net_default.get_xml.find("<ip address='"+kvm_default_ip+"' netmask='255.255.255.0'>") == -1 )
+    kvm_default_ip is defined
 
 ######################################################################
 # Configure virtual network 'external'

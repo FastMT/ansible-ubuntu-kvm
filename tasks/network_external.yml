@@ -8,16 +8,18 @@
     command: destroy
     name: external
   become: yes
-  when: (kvm_net_list.list_nets | join(',')).find("external") != -1
-  check_mode: no
+  when: >- 
+    (kvm_net_list.list_nets | join(',')).find("external") != -1
+    and not ansible_check_mode
 
 - name: KVM - undefine network external
   community.libvirt.virt_net:
     command: undefine
     name: external
   become: yes
-  when: (kvm_net_list.list_nets | join(',')).find("external") != -1
-  check_mode: no
+  when: >- 
+    (kvm_net_list.list_nets | join(',')).find("external") != -1
+    and not ansible_check_mode
 
 - name: KVM - define network external
   community.libvirt.virt_net:
